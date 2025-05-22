@@ -1,104 +1,154 @@
-# ReactPHP Register Center
+# ReactPHP-X Service Registry
 
-基于 ReactPHP 实现的服务注册中心，用于统一调用master提供的服务。
+A lightweight and efficient service registry for PHP applications, designed to work with ReactPHP ecosystem.
 
-## 安装
+## Features
+
+- Static service registry with easy-to-use API
+- Support for metadata management
+- Dynamic method execution on registered services
+- Type-safe service instance management
+
+## Installation
 
 ```bash
 composer require reactphp-x/register-center
 ```
 
-## 基础使用
+## Basic Usage
 
-### 启动注册中心服务器
+### Registering a Service
 
 ```php
-use React\EventLoop\Loop;
-use ReactphpX\RegisterCenter\Register;
+use ReactphpX\RegisterCenter\ServiceRegistry;
 
-$loop = Loop::get();
-$center = new Register(8010, $loop);
-$center->start();
+// Create your service instance
+class MyService {
+    public function hello(string $name): string {
+        return "Hello, {$name}!";
+    }
+}
 
-$loop->run();
+// Register the service
+$service = ServiceRegistry::register("myService", new MyService());
 ```
 
-### 注册服务（Master）
+### Executing Service Methods
 
 ```php
-use React\EventLoop\Loop;
-use ReactphpX\RegisterCenter\Master;
-use ReactphpX\RegisterCenter\Service;
-
-$loop = Loop::get();
-
-// 创建服务实例
-$service = new Service(
-    'user-service',    // 服务名称
-    '127.0.0.1',      // 服务主机
-    8020,             // 服务端口
-    [
-        'version' => '1.0',
-        'type' => 'user'
-    ]
-);
-
-// 连接到注册中心并注册服务
-$master = new Master('127.0.0.1:8010', $loop);
-$master->registerService($service);
-$master->start();
-
-$loop->run();
-```
-
-### 服务发现和调用
-
-```php
-// 获取指定服务
-$service = $center->getService('user-service');
-
-// 获取所有服务
-$services = $center->getAllServices();
-
-// 按元数据查找服务
-$userServices = $center->getServicesByMetadata('type', 'user');
-
-// 调用单个服务
-$result = $center->runOnService('user-service', function ($stream) {
-    $stream->write("Hello Service!");
-    
-    $stream->on('data', function ($data) {
-        echo "Service Response: $data\n";
-    });
-    
-    return $stream;
-});
-
-// 调用所有服务
-$streams = $center->runOnAllServices(function ($stream) {
-    $stream->write("Hello Service!");
-    
-    $stream->on('data', function ($data) {
-        echo "Service Response: $data\n";
-    });
-    
-    return $stream;
-});
-
-// 处理所有服务的响应
-foreach ($streams as $serviceName => $stream) {
-    $stream->on('data', function ($data) use ($serviceName) {
-        echo "Response from $serviceName: $data\n";
-    });
+// Execute a method on the service
+try {
+    $result = ServiceRegistry::execute("myService", "hello", ["World"]);
+    echo $result; // Outputs: Hello, World!
+} catch (\RuntimeException $e) {
+    echo "Error: " . $e->getMessage();
 }
 ```
 
-## 示例
+### Working with Metadata
 
-完整示例请查看 `examples` 目录：
-- `examples/register.php`: 注册中心示例
-- `examples/master.php`: 服务节点示例
+```php
+// Register service with metadata
+ServiceRegistry::register("myService", new MyService(), [
+    "version" => "1.0",
+    "environment" => "production"
+]);
+
+// Add metadata later
+ServiceRegistry::addServiceMetadata("myService", "status", "active");
+
+// Get services by metadata
+$productionServices = ServiceRegistry::getServicesByMetadata("environment", "production");
+
+// Get service metadata
+$service = ServiceRegistry::get("myService");
+$metadata = $service->getMetadata();
+```
+
+### Service Management
+
+```php
+// Check if service exists
+if (ServiceRegistry::has("myService")) {
+    // Get service instance
+    $service = ServiceRegistry::get("myService");
+}
+
+// Remove a service
+ServiceRegistry::remove("myService");
+
+// Get all registered services
+$allServices = ServiceRegistry::all();
+
+// Clear all services
+ServiceRegistry::clear();
+```
+
+## API Reference
+
+### ServiceRegistry
+
+#### Static Methods
+
+- `register(string $name, object $instance, array $metadata = []): Service`
+  - Registers a new service with optional metadata
+  
+- `execute(string $name, string $method, array $arguments = []): mixed`
+  - Executes a method on the registered service
+  
+- `get(string $name): ?Service`
+  - Retrieves a service by name
+  
+- `remove(string $name): void`
+  - Removes a service by name
+  
+- `has(string $name): bool`
+  - Checks if a service exists
+  
+- `all(): array`
+  - Returns all registered services
+  
+- `clear(): void`
+  - Removes all services
+  
+- `getServicesByMetadata(string $key, $value): array`
+  - Finds services by metadata key-value pair
+  
+- `setServiceMetadata(string $name, array $metadata): void`
+  - Sets metadata for a service
+  
+- `addServiceMetadata(string $name, string $key, $value): void`
+  - Adds a single metadata entry to a service
+
+
+### Service
+
+#### Methods
+
+- `getName(): string`
+  - Gets the service name
+  
+- `getInstance(): object`
+  - Gets the service instance
+  
+- `getMetadata(): array`
+  - Gets all metadata
+  
+- `setMetadata(array $metadata): void`
+  - Sets all metadata
+  
+- `addMetadata(string $key, $value): void`
+  - Adds a single metadata entry
+  
+- `removeMetadata(string $key): void`
+  - Removes a metadata entry
+  
+- `hasMetadata(string $key): bool`
+  - Checks if a metadata key exists
+  
+- `getMetadataValue(string $key, $default = null): mixed`
+  - Gets a metadata value with optional default
 
 ## License
 
-MIT 
+MIT License 
