@@ -70,6 +70,7 @@ $master->on('error', function (\Exception $e, $context = []) {
 });
 
 $master->on('connect', function ($tunnelStream) {
+    // 认证信息
     $tunnelStream->write([
         'cmd' => 'auth',
         'token' => 'register-center-token-2024'
@@ -170,4 +171,63 @@ foreach ($streams as $stream) {
 
 ## 许可证
 
-MIT 许可证 
+MIT 许可证
+
+## 认证机制
+
+注册中心支持基于令牌的身份认证。默认使用令牌：`register-center-token-2024`。
+
+### 认证流程
+
+1. 当主节点连接到注册中心后，需要在10秒内发送认证命令，否则连接会被自动关闭。
+
+2. 认证请求格式：
+```php
+$tunnelStream->write([
+    'cmd' => 'auth',
+    'token' => 'register-center-token-2024'
+]);
+```
+
+3. 注册中心将返回以下响应之一：
+
+认证成功响应：
+```php
+[
+    'cmd' => 'auth-success',
+    'message' => 'Authentication successful'
+]
+```
+
+认证失败响应：
+```php
+[
+    'cmd' => 'auth-failed',
+    'message' => 'Invalid authentication token'
+]
+```
+
+超时处理：
+- 如果连接建立后10秒内未完成认证，连接将被自动关闭
+- 系统会生成认证超时的警告日志
+- 主节点需要自行处理重连逻辑
+
+### 令牌管理
+
+注册中心提供了以下方法来管理认证令牌：
+
+```php
+// 设置多个令牌
+$register->setAuthTokens(['token1', 'token2']);
+
+// 添加单个令牌
+$register->addAuthToken('new-token');
+
+// 移除令牌
+$register->removeAuthToken('token-to-remove');
+
+// 获取当前所有令牌
+$tokens = $register->getAuthTokens();
+```
+
+注意：主节点必须完成认证后才能使用其他命令。未认证的请求将收到认证失败的响应。 

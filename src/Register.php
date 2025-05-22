@@ -20,7 +20,9 @@ class Register
     private $pingTimers = [];
     private $authenticatedMasters = [];  // Track authenticated masters
     private $authToken = ['register-center-token-2024'];  // Array of valid auth tokens
+    private $authTimeoutTimers = [];  // Store auth timeout timers
     private const PING_INTERVAL = 20.0;
+    private const AUTH_TIMEOUT = 10.0;  // Authentication timeout in seconds
 
     public function __construct(int $port = 8080, LoopInterface $loop, ?LoggerInterface $logger = null)
     {
@@ -61,6 +63,14 @@ class Register
         $masterId = bin2hex(random_bytes(16));
         $tunnelStream = new TunnelStream($connection, $connection, true);
 
+        // 设置认证超时检查
+        $this->authTimeoutTimers[$masterId] = $this->loop->addTimer(self::AUTH_TIMEOUT, function () use ($masterId, $connection) {
+            if (!isset($this->authenticatedMasters[$masterId])) {
+                $this->logger->warning("Authentication timeout, closing connection", ['masterId' => $masterId]);
+                $connection->close();
+            }
+        });
+
         $tunnelStream->on('cmd', function ($cmd, $message) use ($masterId, $tunnelStream) {
             $this->logger->debug("Received command from master", [
                 'masterId' => $masterId,
@@ -72,10 +82,10 @@ class Register
             } else {
                 // Check if master is authenticated before processing other commands
                 if (!isset($this->authenticatedMasters[$masterId])) {
-                    $tunnelStream->write(json_encode([
+                    $tunnelStream->write([
                         'cmd' => 'auth-failed',
                         'message' => 'Authentication required'
-                    ]));
+                    ]);
                     return;
                 }
                 // Handle other commands here
@@ -131,6 +141,13 @@ class Register
         }
 
         $this->authenticatedMasters[$masterId] = true;
+        
+        // 认证成功后取消超时定时器
+        if (isset($this->authTimeoutTimers[$masterId])) {
+            $this->loop->cancelTimer($this->authTimeoutTimers[$masterId]);
+            unset($this->authTimeoutTimers[$masterId]);
+        }
+        
         $this->logger->info("Master authenticated successfully", ['masterId' => $masterId]);
         $tunnelStream->write([
             'cmd' => 'auth-success',
@@ -165,6 +182,12 @@ class Register
         unset($this->connectedMasters[$masterId]);
         unset($this->lastActivityTimes[$masterId]);
         unset($this->authenticatedMasters[$masterId]);
+        
+        // 清理认证超时定时器
+        if (isset($this->authTimeoutTimers[$masterId])) {
+            $this->loop->cancelTimer($this->authTimeoutTimers[$masterId]);
+            unset($this->authTimeoutTimers[$masterId]);
+        }
         
         if (isset($this->pingTimers[$masterId])) {
             $this->loop->cancelTimer($this->pingTimers[$masterId]);
