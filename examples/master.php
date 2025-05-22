@@ -33,8 +33,15 @@ $master->on('error', function (\Exception $e, $context = []) {
     echo "Context: " . json_encode($context) . "\n";
 });
 
-$master->on('connect', function ($host, $port) {
-    echo "Connected to $host:$port\n";
+$master->on('connect', function ($tunnelStream) {
+    $tunnelStream->write([
+        'cmd' => 'auth',
+        'token' => 'register-center-token-2024'
+    ]);
+    $tunnelStream->on('cmd', function ($cmd, $message) use ($tunnelStream) {
+        echo "Received command: $cmd\n";
+        echo "Message: " . json_encode($message) . "\n";
+    });
 });
 
 $master->on('close', function ($id, $url) {

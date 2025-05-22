@@ -18,6 +18,8 @@ class Register
     private $logger;
     private $lastActivityTimes = [];
     private $pingTimers = [];
+    private $authenticatedMasters = [];  // Track authenticated masters
+    private $authToken = ['register-center-token-2024'];  // Array of valid auth tokens
     private const PING_INTERVAL = 20.0;
 
     public function __construct(int $port = 8080, LoopInterface $loop, ?LoggerInterface $logger = null)
@@ -58,6 +60,27 @@ class Register
     {
         $masterId = bin2hex(random_bytes(16));
         $tunnelStream = new TunnelStream($connection, $connection, true);
+
+        $tunnelStream->on('cmd', function ($cmd, $message) use ($masterId, $tunnelStream) {
+            $this->logger->debug("Received command from master", [
+                'masterId' => $masterId,
+                'cmd' => $cmd,
+                'message' => $message
+            ]);
+            if ($cmd === 'auth') {
+                $this->handleAuth($masterId, $message, $tunnelStream);
+            } else {
+                // Check if master is authenticated before processing other commands
+                if (!isset($this->authenticatedMasters[$masterId])) {
+                    $tunnelStream->write(json_encode([
+                        'cmd' => 'auth-failed',
+                        'message' => 'Authentication required'
+                    ]));
+                    return;
+                }
+                // Handle other commands here
+            }
+        });
         
         $this->connectedMasters[$masterId] = [
             'connection' => $connection,
@@ -94,6 +117,27 @@ class Register
         });
     }
 
+    private function handleAuth(string $masterId, $message, TunnelStream $tunnelStream): void
+    {
+        $data = $message;
+        
+        if (!isset($data['token']) || !in_array($data['token'], $this->authToken)) {
+            $this->logger->warning("Failed authentication attempt", ['masterId' => $masterId]);
+            $tunnelStream->write([
+                'cmd' => 'auth-failed',
+                'message' => 'Invalid authentication token'
+            ]);
+            return;
+        }
+
+        $this->authenticatedMasters[$masterId] = true;
+        $this->logger->info("Master authenticated successfully", ['masterId' => $masterId]);
+        $tunnelStream->write([
+            'cmd' => 'auth-success',
+            'message' => 'Authentication successful'
+        ]);
+    }
+
     private function startPingTimer(string $masterId, TunnelStream $tunnelStream): void
     {
         $this->pingTimers[$masterId] = $this->loop->addPeriodicTimer(self::PING_INTERVAL, function () use ($masterId, $tunnelStream) {
@@ -120,6 +164,7 @@ class Register
     {
         unset($this->connectedMasters[$masterId]);
         unset($this->lastActivityTimes[$masterId]);
+        unset($this->authenticatedMasters[$masterId]);
         
         if (isset($this->pingTimers[$masterId])) {
             $this->loop->cancelTimer($this->pingTimers[$masterId]);
@@ -132,6 +177,11 @@ class Register
         if (!isset($this->connectedMasters[$masterId])) {
             $this->logger->warning("Attempt to run on non-existent master", ['masterId' => $masterId]);
             throw new \Exception("Master not found: {$masterId}");
+        }
+
+        if (!isset($this->authenticatedMasters[$masterId])) {
+            $this->logger->warning("Attempt to run on unauthenticated master", ['masterId' => $masterId]);
+            throw new \Exception("Master not authenticated: {$masterId}");
         }
         
         $this->logger->debug("Running code on master", ['masterId' => $masterId]);
@@ -174,5 +224,50 @@ class Register
     public function setLogger(LoggerInterface $logger): void
     {
         $this->logger = $logger;
+    }
+
+    /**
+     * Set authentication tokens
+     * @param array $tokens Array of valid authentication tokens
+     */
+    public function setAuthTokens(array $tokens): void
+    {
+        $this->authToken = $tokens;
+        $this->logger->info("Authentication tokens updated", ['tokenCount' => count($tokens)]);
+    }
+
+    /**
+     * Add a single authentication token
+     * @param string $token The token to add
+     */
+    public function addAuthToken(string $token): void
+    {
+        if (!in_array($token, $this->authToken)) {
+            $this->authToken[] = $token;
+            $this->logger->info("New authentication token added");
+        }
+    }
+
+    /**
+     * Remove an authentication token
+     * @param string $token The token to remove
+     */
+    public function removeAuthToken(string $token): void
+    {
+        $key = array_search($token, $this->authToken);
+        if ($key !== false) {
+            unset($this->authToken[$key]);
+            $this->authToken = array_values($this->authToken); // 重新索引数组
+            $this->logger->info("Authentication token removed");
+        }
+    }
+
+    /**
+     * Get current authentication tokens
+     * @return array Current authentication tokens
+     */
+    public function getAuthTokens(): array
+    {
+        return $this->authToken;
     }
 } 

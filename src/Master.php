@@ -110,7 +110,6 @@ class Master implements \Evenement\EventEmitterInterface
         $connector = new Connector(loop: $this->loop);
         return $connector->connect("$host:$port")
             ->then(function (DuplexStreamInterface $conn) use ($host, $port, $connectionId) {
-                $this->emit('connect', [$host, $port]);
                 $url = "$host:$port";
                 
                 // Reset retry count on successful connection
@@ -156,6 +155,7 @@ class Master implements \Evenement\EventEmitterInterface
         
         // Create TunnelStream
         $tunnelStream = new TunnelStream($conn, $conn, true);
+        $this->emit('connect', [$tunnelStream]);
         $this->tunnelStreams[$id] = $tunnelStream;
         
         $this->logger->info("Connected to registration center", [
