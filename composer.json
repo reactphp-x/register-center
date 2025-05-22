@@ -1,0 +1,32 @@
+{
+    "name": "reactphp-x/register-center",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "ReactphpX\\RegisterCenter\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ReactphpX\\RegisterCenter\\Tests\\": "tests/"
+        }
+    },
+    "authors": [
+        {
+            "name": "wpjscc",
+            "email": "wpjscc@gmail.com"
+        }
+    ],
+    "require": {
+        "reactphp-x/tunnel-stream": "^1.0",
+        "psr/log": "^3.0",
+        "react/socket": "^1.16"
+    },
+    "suggest": {
+        "monolog/monolog": "Provides a powerful logging implementation that can be used with this package"
+    },
+    "require-dev": {
+        "monolog/monolog": "^3.9",
+        "phpunit/phpunit": "^11.5"
+    }
+}
