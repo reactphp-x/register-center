@@ -26,22 +26,6 @@ class Master implements \Evenement\EventEmitterInterface
     private $reconnectOnClose;
     private $connectionConfigs = [];
 
-
-    private static ?self $instance = null;
-
-    public static function getInstance()
-    {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        return self::$instance;
-    }
-
-    public static function setInstance(self $instance)
-    {
-        self::$instance = $instance;
-    }
-
     public function __construct(
         int $retryAttempts = PHP_INT_MAX,
         float $retryDelay = 2.0,
