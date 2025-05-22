@@ -1,127 +1,104 @@
 # ReactPHP Register Center
 
-A flexible and powerful registration center implementation for ReactPHP applications, enabling service discovery and communication between distributed components.
+基于 ReactPHP 实现的服务注册中心，用于统一调用master提供的服务。
 
-## Features
-
-- Service registration and discovery
-- Master-slave architecture support
-- Real-time communication between components
-- Built-in logging support
-- Asynchronous event-driven architecture
-- Easy integration with existing ReactPHP applications
-
-## Requirements
-
-- PHP 8.1 or higher
-- ReactPHP Socket ^1.16
-- PSR-3 compatible logger
-
-## Installation
-
-You can install the package via composer:
+## 安装
 
 ```bash
 composer require reactphp-x/register-center
 ```
 
-## Basic Usage
+## 基础使用
 
-### Starting a Registration Center
+### 启动注册中心服务器
 
 ```php
 use React\EventLoop\Loop;
 use ReactphpX\RegisterCenter\Register;
-use Psr\Log\LoggerInterface;
 
 $loop = Loop::get();
-$center = new Register(8010, $loop, $logger);
+$center = new Register(8010, $loop);
 $center->start();
 
 $loop->run();
 ```
 
-### Example with Logging (using Monolog)
+### 注册服务（Master）
 
 ```php
-use Monolog\Logger;
-use Monolog\Level;
-use Monolog\Handler\StreamHandler;
-use Monolog\Formatter\LineFormatter;
+use React\EventLoop\Loop;
+use ReactphpX\RegisterCenter\Master;
+use ReactphpX\RegisterCenter\Service;
 
-// Create logger
-$logger = new Logger('registration-center');
-$handler = new StreamHandler('php://stdout', Level::Debug);
-$handler->setFormatter(new LineFormatter(
-    "[%datetime%] %channel%.%level_name%: %message% %context%\n",
-    null,
-    true,
-    true
-));
-$logger->pushHandler($handler);
+$loop = Loop::get();
 
-// Create and start registration center with logger
-$center = new Register(8010, $loop, $logger);
-$center->start();
+// 创建服务实例
+$service = new Service(
+    'user-service',    // 服务名称
+    '127.0.0.1',      // 服务主机
+    8020,             // 服务端口
+    [
+        'version' => '1.0',
+        'type' => 'user'
+    ]
+);
+
+// 连接到注册中心并注册服务
+$master = new Master('127.0.0.1:8010', $loop);
+$master->registerService($service);
+$master->start();
+
+$loop->run();
 ```
 
-### Running Code on Connected Masters
+### 服务发现和调用
 
 ```php
-$loop->addPeriodicTimer(5, function () use ($center) {
-    $masters = $center->getConnectedMasters();
+// 获取指定服务
+$service = $center->getService('user-service');
+
+// 获取所有服务
+$services = $center->getAllServices();
+
+// 按元数据查找服务
+$userServices = $center->getServicesByMetadata('type', 'user');
+
+// 调用单个服务
+$result = $center->runOnService('user-service', function ($stream) {
+    $stream->write("Hello Service!");
     
-    if (empty($masters)) {
-        echo "No masters connected\n";
-        return;
-    }
-    
-    $streams = $center->runOnAllMasters(function ($stream) {
-        $stream->write("Hello from Registration Center!");
-        
-        $stream->on('data', function ($data) use ($stream) {
-            echo "Received from master: $data\n";
-            $stream->end("Thank you for your response!");
-        });
-        
-        return $stream;
+    $stream->on('data', function ($data) {
+        echo "Service Response: $data\n";
     });
-
-    foreach ($streams as $masterId => $stream) {
-        $stream->on('data', function ($data) use ($masterId) {
-            echo "Response from master $masterId: $data\n";
-        });
-        $stream->write("Hello from Registration Center!");
-    }
+    
+    return $stream;
 });
+
+// 调用所有服务
+$streams = $center->runOnAllServices(function ($stream) {
+    $stream->write("Hello Service!");
+    
+    $stream->on('data', function ($data) {
+        echo "Service Response: $data\n";
+    });
+    
+    return $stream;
+});
+
+// 处理所有服务的响应
+foreach ($streams as $serviceName => $stream) {
+    $stream->on('data', function ($data) use ($serviceName) {
+        echo "Response from $serviceName: $data\n";
+    });
+}
 ```
 
-## Advanced Usage
+## 示例
 
-For more advanced usage examples, please check the `examples/` directory in the repository:
-
-- `examples/master.php`: Example of setting up a master node
-- `examples/register.php`: Example of setting up a registration center
-
-## Logging
-
-The package supports any PSR-3 compatible logger. While not required, we recommend using Monolog for advanced logging capabilities:
-
-```bash
-composer require monolog/monolog
-```
-
-## Testing
-
-```bash
-./vendor/bin/phpunit
-```
+完整示例请查看 `examples` 目录：
+- `examples/register.php`: 注册中心示例
+- `examples/master.php`: 服务节点示例
 
 ## License
 
-The MIT License (MIT). Please see [License File](LICENSE) for more information.
-
-
-## Support
-
-If you have any questions or issues, please [create an issue](https://github.com/reactphp-x/register-center/issues/new) on GitHub. 
+MIT 

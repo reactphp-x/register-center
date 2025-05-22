@@ -26,6 +26,22 @@ class Master implements \Evenement\EventEmitterInterface
     private $reconnectOnClose;
     private $connectionConfigs = [];
 
+
+    private static ?self $instance = null;
+
+    public static function getInstance()
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    public static function setInstance(self $instance)
+    {
+        self::$instance = $instance;
+    }
+
     public function __construct(
         int $retryAttempts = PHP_INT_MAX,
         float $retryDelay = 2.0,
@@ -45,6 +61,11 @@ class Master implements \Evenement\EventEmitterInterface
      */
     public function connectViaConnector(string $host, int $port, ?bool $reconnectOnClose = null): void
     {
+
+        if (isset($this->connectionConfigs[$host . ':' . $port])) {
+            return;
+        }
+
         // Store connection config for potential reconnection
         $connectionId = "$host:$port";
         $this->connectionConfigs[$connectionId] = [
@@ -58,6 +79,18 @@ class Master implements \Evenement\EventEmitterInterface
                 // Connection failure is already logged in connectWithRetry
                 $this->emit('error', [$e, compact('host', 'port')]);
             });
+    }
+
+    public function close()
+    {
+        foreach ($this->connections as $id => $conn) {
+            $conn->close();
+        }
+        $this->connections = [];
+        $this->tunnelStreams = [];
+        $this->connectionConfigs = [];
+        $this->connectionRetries = [];
+        $this->logger->info("All connections closed");
     }
 
     /**
