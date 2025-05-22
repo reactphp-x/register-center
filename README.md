@@ -101,7 +101,7 @@ $streams = $center->runOnAllMasters(function ($stream) {
     $stream->write("来自注册中心的消息！");
     
     $stream->on('data', function ($data) use ($stream) {
-        echo "收到主节点响应: $data\n";
+        echo "收到注册中心响应: $data\n";
         $stream->end("感谢您的响应！");
     });
     

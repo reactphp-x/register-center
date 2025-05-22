@@ -43,7 +43,7 @@ $loop->addPeriodicTimer(5, function () use ($center) {
         $stream->write("Hello from Registration Center!");
         
         $stream->on('data', function ($data) use ($stream) {
-            echo "Received from master: $data\n";
+            echo "Received from Registration Center: $data\n";
             // Send response back
             $stream->end("Thank you for your response!");
         });
