@@ -12,7 +12,7 @@ use React\Stream\DuplexStreamInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
-class Master implements \Evenement\EventEmitterInterface
+final class Master implements \Evenement\EventEmitterInterface
 {
     use \Evenement\EventEmitterTrait;
     
@@ -65,6 +65,26 @@ class Master implements \Evenement\EventEmitterInterface
             });
     }
 
+    public function removeConnection(string $host, int $port): void
+    {
+        $connectionId = "$host:$port";
+        
+        // Remove connection config to prevent reconnection
+        unset($this->connectionConfigs[$connectionId]);
+        
+        // Find and close the connection if it exists
+        foreach ($this->connections as $id => $conn) {
+            if (strpos($id, $connectionId) === 0) {
+                $conn->close();
+            }
+        }
+        
+        $this->logger->info("No active connection found to remove", [
+            'host' => $host,
+            'port' => $port
+        ]);
+    }
+
     public function close()
     {
         foreach ($this->connections as $id => $conn) {
@@ -83,6 +103,13 @@ class Master implements \Evenement\EventEmitterInterface
     private function connectWithRetry(string $host, int $port, int $attempt = 1): PromiseInterface
     {
         $connectionId = "$host:$port";
+
+        if (!isset($this->connectionConfigs[$connectionId])) {
+            $this->logger->error("Connection config not found", [
+                'connectionId' => $connectionId
+            ]);
+            return \React\Promise\reject(new \Exception("Connection config not found"));
+        }
         
         $this->logger->info("Attempting to connect to registration center", [
             'host' => $host,
@@ -94,12 +121,11 @@ class Master implements \Evenement\EventEmitterInterface
         $connector = new Connector(loop: $this->loop);
         return $connector->connect("$host:$port")
             ->then(function (DuplexStreamInterface $conn) use ($host, $port, $connectionId) {
-                $url = "$host:$port";
                 
                 // Reset retry count on successful connection
                 unset($this->connectionRetries[$connectionId]);
                 
-                return $this->setupConnection($url, $conn);
+                return $this->setupConnection($connectionId, $conn);
             }, function (\Exception $e) use ($host, $port, $attempt, $connectionId) {
                 $this->logger->error("Failed to connect to registration center", [
                     'host' => $host,
@@ -132,9 +158,9 @@ class Master implements \Evenement\EventEmitterInterface
     /**
      * Set up the connection with TunnelStream
      */
-    private function setupConnection(string $url, DuplexStreamInterface $conn): string
+    private function setupConnection(string $connectionId, DuplexStreamInterface $conn): string
     {
-        $id = bin2hex(random_bytes(16));
+        $id = $connectionId;
         $this->connections[$id] = $conn;
         
         // Create TunnelStream
@@ -143,38 +169,38 @@ class Master implements \Evenement\EventEmitterInterface
         $this->tunnelStreams[$id] = $tunnelStream;
         
         $this->logger->info("Connected to registration center", [
-            'url' => $url,
+            'connectionId' => $connectionId,
             'id' => $id
         ]);
 
         // Handle connection errors
-        $conn->on('error', function (\Exception $e) use ($id, $url) {
+        $conn->on('error', function (\Exception $e) use ($id, $connectionId) {
             $this->logger->error("Connection error", [
-                'url' => $url,
+                'connectionId' => $connectionId,
                 'id' => $id,
                 'error' => $e->getMessage()
             ]);
-            $this->emit('error', [$e, ['id' => $id, 'url' => $url]]);
+            $this->emit('error', [$e, ['id' => $id, 'connectionId' => $connectionId]]);
         });
         
         // Handle connection close
-        $conn->on('close', function () use ($id, $url) {
-            $this->emit('close', [$id, $url]);
+        $conn->on('close', function () use ($id, $connectionId) {
+            $this->emit('close', [$id, $connectionId]);
             unset($this->connections[$id]);
             unset($this->tunnelStreams[$id]);
             
             $this->logger->info("Disconnected from registration center", [
-                'url' => $url,
+                'connectionId' => $connectionId,
                 'id' => $id
             ]);
 
             // Handle reconnection if enabled
-            list($host, $port) = explode(':', $url);
+            list($host, $port) = explode(':', $connectionId);
             $connectionId = "$host:$port";
             if (isset($this->connectionConfigs[$connectionId]) && 
                 $this->connectionConfigs[$connectionId]['reconnectOnClose']) {
                 $this->logger->info("Scheduling reconnection", [
-                    'url' => $url,
+                    'connectionId' => $connectionId,
                     'delay' => $this->retryDelay
                 ]);
                 

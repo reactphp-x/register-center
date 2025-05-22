@@ -2,7 +2,7 @@
 
 namespace ReactphpX\RegisterCenter;
 
-class ServiceRegistry
+final class ServiceRegistry
 {
     private static array $services = [];
 
@@ -82,6 +82,34 @@ class ServiceRegistry
             throw new \RuntimeException("Method '{$method}' not found in service '{$name}'");
         }
 
+        $arguments = self::matchArguments($instance, $method, $arguments);
+
         return $instance->$method(...$arguments);
+    }
+
+    private static function matchArguments($instance, $method, $arguments): array
+    {
+        if (isset($arguments[0])) {
+            return $arguments;
+        }
+
+        $className = get_class($instance);
+        $rp = new \ReflectionClass($className);
+        $methodParameters = [];
+        $rpParameters = $rp->getMethod($method)->getParameters();
+        foreach ($rpParameters as $rpParameter) {
+            $name = $rpParameter->getName();
+            $position = $rpParameter->getPosition();
+            if (isset($arguments[$name])) {
+                $methodParameters[$position] = $arguments[$name];
+            } else {
+                if ($rpParameter->isOptional()) {
+                    $methodParameters[$position] = $rpParameter->getDefaultValue();
+                } else {
+                    throw new \RuntimeException("{$className} 方法 {$method} 缺少 {$name} 参数");
+                }
+            }
+        }
+        return $methodParameters;
     }
 } 

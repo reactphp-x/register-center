@@ -2,7 +2,7 @@
 
 namespace ReactphpX\RegisterCenter;
 
-class Service
+final class Service
 {
     private string $name;
     private $instance;

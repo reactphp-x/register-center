@@ -10,7 +10,7 @@ use React\Promise\Deferred;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
-class Register
+final class Register
 {
     private $loop;
     private $port;
@@ -239,6 +239,13 @@ class Register
     public function getConnectedMasters(): array
     {
         return array_keys($this->connectedMasters);
+    }
+
+    public function writeRawMessageToAllMasters(array $message): void
+    {
+        foreach ($this->connectedMasters as $masterId => $master) {
+            $master['tunnelStream']->write($message);
+        }
     }
 
     /**
