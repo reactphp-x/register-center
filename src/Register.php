@@ -19,6 +19,7 @@ final class Register
     private $lastActivityTimes = [];
     private $pingTimers = [];
     private $authenticatedMasters = [];  // Track authenticated masters
+    private $servicesMaster = [];
     private $authToken = ['register-center-token-2024'];  // Array of valid auth tokens
     private $authTimeoutTimers = [];  // Store auth timeout timers
     private const PING_INTERVAL = 20.0;
@@ -153,6 +154,48 @@ final class Register
             'cmd' => 'auth-success',
             'message' => 'Authentication successful'
         ]);
+
+        $stream = $tunnelStream->run(function ($stream) use ($masterId) {
+            $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::getServiceNameAndMetadata());
+        });
+
+        $stream->on('data', function ($serviceNameAndMetadata) use ($masterId) {
+            $this->servicesMaster[$masterId] = $serviceNameAndMetadata;
+        });
+    }
+
+    public function getServicesMaster(): array
+    {
+        return $this->servicesMaster;
+    }
+
+    public function getServicesMasterByMasterId(string $masterId): array
+    {
+        return $this->servicesMaster[$masterId] ?? [];
+    }
+
+    public function getServicesMasterByServiceName(string $serviceName): array
+    {
+        $_services = [];
+        foreach ($this->servicesMaster as $masterId => $services) {
+            if (isset($services[$serviceName])) {
+                $_services[$masterId] = $services[$serviceName];
+            }
+        }
+        return $_services;
+    }
+
+    public function getServicesMasterByServiceNameAndMetadata(string $serviceName, $key, $value): array
+    {
+        $_services = [];
+        foreach ($this->servicesMaster as $masterId => $service) {
+            if (isset($service[$serviceName])) {
+                if ($service[$serviceName]['metadata'][$key] === $value) {
+                    $_services[$masterId] = $service[$serviceName];
+                }
+            }
+        }
+        return $_services;
     }
 
     private function startPingTimer(string $masterId, TunnelStream $tunnelStream): void
@@ -182,6 +225,7 @@ final class Register
         unset($this->connectedMasters[$masterId]);
         unset($this->lastActivityTimes[$masterId]);
         unset($this->authenticatedMasters[$masterId]);
+        unset($this->servicesMaster[$masterId]);
         
         // 清理认证超时定时器
         if (isset($this->authTimeoutTimers[$masterId])) {

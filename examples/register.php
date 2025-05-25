@@ -67,21 +67,32 @@ $loop->addPeriodicTimer(5, function () use ($center) {
         echo "No masters connected\n";
         return;
     }
-    
     $service = 'hello-wrold';
     $method1 = 'sayHello';
     $method2 = 'sayHello2';
     $method2Params = ['name' => 'John Doe'];
 
+    // 获取提供特定服务的master
+    $serviceMasters = $center->getServicesMasterByServiceName($service);
+    
+    if (empty($serviceMasters)) {
+        echo "No masters found providing service: $service\n";
+        return;
+    }
 
-    $streams = $center->runOnAllMasters(function ($stream) use ($service, $method1, $method2, $method2Params) {
-        $stream->write(\ReactphpX\RegisterCenter\ServiceRegistry::execute($service, $method1));
-        $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::execute($service, $method2, $method2Params));
-    });
+    $streams = [];
+    foreach ($serviceMasters as $masterId => $serviceMaster) {
+        $streams[$masterId] = $center->runOnMaster($masterId, function ($stream) use ($service, $method1, $method2, $method2Params) {
+            $stream->write(\ReactphpX\RegisterCenter\ServiceRegistry::execute($service, $method1));
+            $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::execute($service, $method2, $method2Params));
+            return $stream;
+        });
+    }
+
 
     foreach ($streams as $masterId => $stream) {
         $stream->on('data', function ($data) use ($masterId) {
-            if (is_array($data)) {  
+            if (is_array($data)) {
                 echo "Response from master $masterId: " . json_encode($data) . "\n";
             } else {
                 echo "Response from master $masterId: $data\n";
@@ -102,6 +113,11 @@ Loop::addTimer(10, function () use ($center) {
             ]
         ]
     ]);
+});
+
+Loop::addPeriodicTimer(5, function () use ($center) {
+    $services = $center->getServicesMaster();
+    echo "Services: " . json_encode($services) . "\n";
 });
 
 Loop::addTimer(20, function () use ($center) {

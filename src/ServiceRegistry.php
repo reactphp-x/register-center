@@ -38,6 +38,16 @@ final class ServiceRegistry
         self::$services = [];
     }
 
+    public static function getServiceNameAndMetadata(): array
+    {
+        return array_map(function (Service $service) {
+            return [
+                'name' => $service->getName(),
+                'metadata' => $service->getMetadata()
+            ];
+        }, self::$services);
+    }
+
     public static function getServicesByMetadata(string $key, $value): array
     {
         return array_filter(self::$services, function (Service $service) use ($key, $value) {

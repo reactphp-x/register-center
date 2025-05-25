@@ -58,5 +58,10 @@ $loop->addPeriodicTimer(5, function () use ($center) {
 
 });
 
+Loop::addPeriodicTimer(5, function () use ($center) {
+    $services = $center->getServicesMaster();
+    echo "Services: " . json_encode($services) . "\n";
+});
+
 // Run the loop
 $loop->run(); 
