@@ -188,14 +188,12 @@ final class Register
     public function getServicesMasterByServiceNameAndMetadata(string $serviceName, $key, $value): array
     {
         $_services = [];
-        foreach ($this->servicesMaster as $masterId => $service) {
-            if (isset($service[$serviceName])) {
-                if ($service[$serviceName]['metadata'][$key] === $value) {
-                    $_services[$masterId] = $service[$serviceName];
-                }
+        foreach ($this->servicesMaster as $masterId => $services) {
+            if (isset($services[$serviceName]) && isset($services[$serviceName]['metadata'][$key]) && $services[$serviceName]['metadata'][$key] === $value) {
+                $_services[$masterId] = $services[$serviceName];
             }
         }
-        return $_services;
+        return $_services;  
     }
 
     private function startPingTimer(string $masterId, TunnelStream $tunnelStream): void
