@@ -10,7 +10,8 @@ use React\Promise\Deferred;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
-final class Register
+
+final class Register extends \EventEmitter\EventEmitter
 {
     private $loop;
     private $port;
@@ -155,6 +156,9 @@ final class Register
             'message' => 'Authentication successful'
         ]);
 
+        $this->emit('master-authenticated', [$masterId, $tunnelStream]);
+
+
         $stream = $tunnelStream->run(function ($stream) use ($masterId) {
             $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::getServiceNameAndMetadata());
         });
@@ -252,6 +256,7 @@ final class Register
         $this->logger->debug("Running code on master", ['masterId' => $masterId]);
         
         $tunnelStream = $this->connectedMasters[$masterId]['tunnelStream'];
+        // 记录运行次数
         $stream = $tunnelStream->run($callback);
         
         return $stream;
