@@ -10,9 +10,10 @@ use React\Promise\Deferred;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
-
-final class Register extends \EventEmitter\EventEmitter
+final class Register implements \Evenement\EventEmitterInterface
 {
+    use \Evenement\EventEmitterTrait;
+    
     private $loop;
     private $port;
     private $connectedMasters = [];
@@ -156,8 +157,8 @@ final class Register extends \EventEmitter\EventEmitter
             'message' => 'Authentication successful'
         ]);
 
-        $this->emit('master-authenticated', [$masterId, $tunnelStream]);
 
+        $this->emit('master-authenticated', [$masterId, $tunnelStream]);
 
         $stream = $tunnelStream->run(function ($stream) use ($masterId) {
             $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::getServiceNameAndMetadata());
@@ -192,12 +193,14 @@ final class Register extends \EventEmitter\EventEmitter
     public function getServicesMasterByServiceNameAndMetadata(string $serviceName, $key, $value): array
     {
         $_services = [];
-        foreach ($this->servicesMaster as $masterId => $services) {
-            if (isset($services[$serviceName]) && isset($services[$serviceName]['metadata'][$key]) && $services[$serviceName]['metadata'][$key] === $value) {
-                $_services[$masterId] = $services[$serviceName];
+        foreach ($this->servicesMaster as $masterId => $service) {
+            if (isset($service[$serviceName])) {
+                if ($service[$serviceName]['metadata'][$key] === $value) {
+                    $_services[$masterId] = $service[$serviceName];
+                }
             }
         }
-        return $_services;  
+        return $_services;
     }
 
     private function startPingTimer(string $masterId, TunnelStream $tunnelStream): void
@@ -256,7 +259,6 @@ final class Register extends \EventEmitter\EventEmitter
         $this->logger->debug("Running code on master", ['masterId' => $masterId]);
         
         $tunnelStream = $this->connectedMasters[$masterId]['tunnelStream'];
-        // 记录运行次数
         $stream = $tunnelStream->run($callback);
         
         return $stream;
