@@ -91,7 +91,14 @@ final class Register implements \Evenement\EventEmitterInterface
                     ]);
                     return;
                 }
-                // Handle other commands here
+
+                if ($cmd === 'register') {
+                    $this->registerService($masterId, $tunnelStream);
+                } else if ($cmd === 'remove') {
+                    $this->removeService($masterId);
+                } else {
+                    $this->emit('cmd', [$masterId, $cmd, $message, $tunnelStream]);
+                }
             }
         });
         
@@ -160,13 +167,31 @@ final class Register implements \Evenement\EventEmitterInterface
 
         $this->emit('master-authenticated', [$masterId, $tunnelStream]);
 
+        $this->registerService($masterId, $tunnelStream);
+    }
+
+    private function registerService(string $masterId, $tunnelStream): void
+    {
         $stream = $tunnelStream->run(function ($stream) use ($masterId) {
             $stream->end(\ReactphpX\RegisterCenter\ServiceRegistry::getServiceNameAndMetadata());
         });
 
         $stream->on('data', function ($serviceNameAndMetadata) use ($masterId) {
             $this->servicesMaster[$masterId] = $serviceNameAndMetadata;
+            $this->emit('service-registered', [$masterId, $serviceNameAndMetadata]);
         });
+
+        $stream->on('close', function () use ($masterId) {
+            $this->logger->info("Service registration closed", ['masterId' => $masterId]);
+        });
+
+    }
+
+    private function removeService(string $masterId): void
+    {
+        $this->emit('service-removed', [$masterId]);
+
+        unset($this->servicesMaster[$masterId]);
     }
 
     public function getServicesMaster(): array
